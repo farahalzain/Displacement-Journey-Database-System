@@ -1,0 +1,435 @@
+Farah Bassam Alzain
+
+sqlplus
+
+hr
+hr
+
+CONNECT / AS SYSDBA;
+
+create user projectLabFarah identified by projectLabFarah;
+
+grant create session to projectLabFarah;
+
+grant create table to projectLabFarah;
+
+ALTER USER projectLabFarah QUOTA UNLIMITED ON SYSTEM;
+
+-- Login by hmFarah user
+projectLabFarah
+projectLabFarah
+
+
+-- Create independent tables first (no FK dependencies)
+
+-- ADDRESS
+CREATE TABLE ADDRESS (
+ AddressID  NUMBER(10)    PRIMARY KEY,
+ Governorate   VARCHAR2(100)  NOT NULL,
+ CityOrCamp   VARCHAR2(100)  NOT NULL,
+ AreaOrNeighborhood   VARCHAR2(150),
+ StreetDetails   VARCHAR2(200),
+ Landmark   VARCHAR2(200) );
+
+-- LOCATION_TYPE
+CREATE TABLE LOCATION_TYPE ( 
+LocationTypeID  NUMBER(10) PRIMARY KEY, 
+TypeName  VARCHAR2(100) NOT NULL ); 
+
+-- ORGANIZATION
+CREATE TABLE ORGANIZATION ( 
+OrgID NUMBER(10)  PRIMARY KEY,
+OrgName  VARCHAR2(150) NOT NULL,
+OrgType  VARCHAR2(100),
+ContactPhone  VARCHAR2(20),
+ContactEmail  VARCHAR2(100) );
+
+
+-- NEED_TYPE
+CREATE TABLE NEED_TYPE (
+NeedTypeID  NUMBER(10)  PRIMARY KEY,
+NeedName  VARCHAR2(200) NOT NULL,
+Category  VARCHAR2(100) );
+
+-- AID_PACKAGE
+CREATE TABLE AID_PACKAGE (
+PackageID  NUMBER(10)    PRIMARY KEY,
+PackageName   VARCHAR2(200) NOT NULL,
+PackageCategory  VARCHAR2(100),
+UnitName  VARCHAR2(50),
+Notes  VARCHAR2(200) );
+
+
+
+-- FAMILY (HeadPersonID is NOT NULL)
+-- BUT: circular FK with PERSON. We create it NULL TEMPORARILY, then Alter later to add FK + NOT NULL 
+
+CREATE TABLE FAMILY (
+FamilyID NUMBER(10)  PRIMARY KEY,
+OriginalAddressID  NUMBER(10)  NOT NULL,
+HeadPersonID   NUMBER(10), 
+PrimaryPhone   VARCHAR2(20) NOT NULL, 
+RegistrationDate DATE  NOT NULL, 
+TotalMembers   NUMBER(3)  NOT NULL, 
+TotalChildren   NUMBER(3) DEFAULT 0,
+TotalElderly   NUMBER(3) DEFAULT 0,
+TotalPersonsWithDisability NUMBER(3) DEFAULT 0,
+TotalOrphans  NUMBER(3) DEFAULT 0,
+Status  VARCHAR2(50),
+CONSTRAINT fk_family_address FOREIGN KEY (OriginalAddressID)
+REFERENCES ADDRESS(AddressID),
+CONSTRAINT chk_family_status CHECK (Status IN ('Active','Inactive','Merged')));
+
+
+--  PERSON
+CREATE TABLE PERSON (
+PersonID NUMBER(10)    PRIMARY KEY,
+FamilyID    NUMBER(10)    NOT NULL,
+FullName    VARCHAR2(100) NOT NULL,
+Gender VARCHAR2(8) CHECK (Gender IN ('Male','Female')),
+DateOfBirth  DATE,
+RelationshipToHead VARCHAR2(50),
+VulnerabilityFlag CHAR(1) CHECK (VulnerabilityFlag IN ('Y','N')),
+Notes VARCHAR2(200),
+CONSTRAINT fk_person_family FOREIGN KEY (FamilyID)
+REFERENCES FAMILY(FamilyID));
+
+--  LOCATION
+CREATE TABLE LOCATION (
+LocationID   NUMBER(10)    PRIMARY KEY,
+LocationName  VARCHAR2(150) NOT NULL,
+LocationTypeID  NUMBER(10)    NOT NULL,
+AddressID  NUMBER(10)    NOT NULL,
+ManagingOrgID  NUMBER(10),
+Capacity  NUMBER(5),
+GPS_Lat  NUMBER(10,6),
+GPS_Lng  NUMBER(10,6),
+CONSTRAINT fk_location_type FOREIGN KEY (LocationTypeID)
+REFERENCES LOCATION_TYPE(LocationTypeID),
+CONSTRAINT fk_location_address FOREIGN KEY (AddressID)
+REFERENCES ADDRESS(AddressID),
+CONSTRAINT fk_location_org FOREIGN KEY (ManagingOrgID)
+REFERENCES ORGANIZATION(OrgID));
+
+--  STAY
+CREATE TABLE STAY ( 
+StayID NUMBER(10)  PRIMARY KEY,
+FamilyID  NUMBER(10)  NOT NULL,
+LocationID  NUMBER(10)  NOT NULL,
+StayStartDateTime  DATE  NOT NULL,
+StayEndDateTime  DATE,
+ShelterUnit    VARCHAR2(50),
+IsCurrent  CHAR(1) CHECK (IsCurrent IN ('Y','N')),
+CONSTRAINT fk_stay_family FOREIGN KEY (FamilyID)
+REFERENCES FAMILY(FamilyID),
+CONSTRAINT fk_stay_location FOREIGN KEY (LocationID)
+REFERENCES LOCATION(LocationID));
+
+--  DISPLACEMENT_EVENT
+CREATE TABLE DISPLACEMENT_EVENT (
+EventID    NUMBER(10)   PRIMARY KEY,
+FamilyID     NUMBER(10)  NOT NULL,
+FromStayID  NUMBER(10),
+ToLocationID     NUMBER(10) NOT NULL,
+EventStartDateTime  DATE   NOT NULL,
+EventType VARCHAR2(50),
+CauseTrigger   VARCHAR2(100),
+TransportationType  VARCHAR2(200),
+CONSTRAINT fk_event_family FOREIGN KEY (FamilyID)
+REFERENCES FAMILY(FamilyID),
+CONSTRAINT fk_event_fromstay FOREIGN KEY (FromStayID)
+REFERENCES STAY(StayID),
+CONSTRAINT fk_event_tolocation FOREIGN KEY (ToLocationID)
+REFERENCES LOCATION(LocationID));
+
+
+-- NEED_ASSESSMENT
+CREATE TABLE NEED_ASSESSMENT (
+AssessmentID NUMBER(10)  PRIMARY KEY,
+StayID   NUMBER(10)  NOT NULL,
+AssessmentDateTime DATE  NOT NULL,
+AssessedByOrgID  NUMBER(10),
+Method  VARCHAR2(100),
+OverallSeverityScore NUMBER(2)  CHECK (OverallSeverityScore BETWEEN 1 AND 5),
+CONSTRAINT fk_assess_stay FOREIGN KEY (StayID)
+REFERENCES STAY(StayID),
+CONSTRAINT fk_assess_org FOREIGN KEY (AssessedByOrgID)
+REFERENCES ORGANIZATION(OrgID));
+
+--  NEED_ITEM
+CREATE TABLE NEED_ITEM (
+NeedItemID  NUMBER(10)  PRIMARY KEY,
+AssessmentID  NUMBER(10)  NOT NULL,
+NeedTypeID  NUMBER(10)  NOT NULL,
+TargetPersonID  NUMBER(10),
+QuantityNeeded  NUMBER(10),
+PriorityLevel  NUMBER(1)  CHECK (PriorityLevel BETWEEN 1 AND 5),
+Status  VARCHAR2(20),
+CONSTRAINT fk_item_assessment FOREIGN KEY (AssessmentID)
+REFERENCES NEED_ASSESSMENT(AssessmentID),
+CONSTRAINT fk_item_needtype FOREIGN KEY (NeedTypeID)
+REFERENCES NEED_TYPE(NeedTypeID),
+CONSTRAINT fk_item_person FOREIGN KEY (TargetPersonID)
+REFERENCES PERSON(PersonID));
+
+
+-- AID_DISTRIBUTION
+CREATE TABLE AID_DISTRIBUTION (
+DistributionID  NUMBER(10)   PRIMARY KEY,
+LocationID  NUMBER(10)  NOT NULL,
+DonorOrgID  NUMBER(10)  NOT NULL,
+PackageID NUMBER(10) NOT NULL,
+AssessmentID  NUMBER(10),
+DistributionDateTime DATE  NOT NULL,
+DistributionNotes  VARCHAR2(200),
+CONSTRAINT fk_dist_location FOREIGN KEY (LocationID)
+REFERENCES LOCATION(LocationID),
+CONSTRAINT fk_dist_org FOREIGN KEY (DonorOrgID)
+REFERENCES ORGANIZATION(OrgID),
+CONSTRAINT fk_dist_package FOREIGN KEY (PackageID)
+REFERENCES AID_PACKAGE(PackageID),
+CONSTRAINT fk_dist_assessment FOREIGN KEY (AssessmentID)
+REFERENCES NEED_ASSESSMENT(AssessmentID));
+
+-- AID_RECEIPT
+CREATE TABLE AID_RECEIPT (
+ReceiptID  NUMBER(10) PRIMARY KEY,
+DistributionID   NUMBER(10)   NOT NULL,
+FamilyID   NUMBER(10)   NOT NULL,
+ReceivedDateTime DATE,
+Quantity  NUMBER,
+ReceiptStatus  VARCHAR2(50),
+ProofCode  VARCHAR2(50),
+VerifiedByName  VARCHAR2(100),
+CONSTRAINT fk_receipt_distribution FOREIGN KEY (DistributionID)
+REFERENCES AID_DISTRIBUTION(DistributionID),
+CONSTRAINT fk_receipt_family FOREIGN KEY (FamilyID)
+REFERENCES FAMILY(FamilyID),
+CONSTRAINT uq_receipt UNIQUE (DistributionID, FamilyID));
+
+
+
+--  ALTER to complete circular FK correctly
+--    FK 
+-- then NOT NULL after inserting
+
+ALTER TABLE FAMILY
+ADD CONSTRAINT fk_family_headperson FOREIGN KEY (HeadPersonID)
+REFERENCES PERSON(PersonID);
+
+
+-- DML (INSERT / UPDATE / DELETE / SELECT)
+-- INSERT
+-- INSERT INTO ADDRESS
+
+INSERT INTO ADDRESS (AddressID, Governorate, CityOrCamp, AreaOrNeighborhood, StreetDetails, Landmark)
+VALUES (1, 'Gaza', 'Gaza City', 'Al-Rimal', NULL, 'near Dawood mosque');
+
+INSERT INTO ADDRESS (AddressID, Governorate, CityOrCamp, AreaOrNeighborhood, StreetDetails, Landmark)
+VALUES (2, 'Khan Younis', 'Khan Younis', 'Abasan', NULL, 'middle town');
+
+COMMIT;
+
+
+--  INSERT INTO LOCATION_TYPE
+INSERT INTO LOCATION_TYPE (LocationTypeID, TypeName) VALUES (1, 'UN Shelter');
+INSERT INTO LOCATION_TYPE (LocationTypeID, TypeName) VALUES (2, 'Tent');
+INSERT INTO LOCATION_TYPE (LocationTypeID, TypeName) VALUES (3, 'HostHouse');
+COMMIT;
+
+-- INSERT INTO ORGANIZATION
+INSERT INTO ORGANIZATION (OrgID, OrgName, OrgType, ContactPhone, ContactEmail)
+VALUES (1, 'WFPA', 'WFPA', NULL, NULL);
+
+INSERT INTO ORGANIZATION (OrgID, OrgName, OrgType, ContactPhone, ContactEmail)
+VALUES (2, 'Local NGO A', 'NGO', NULL, NULL);
+
+COMMIT;
+
+-- INSERT INTO NEED_TYPE
+INSERT INTO NEED_TYPE (NeedTypeID, NeedName, Category) VALUES (1, 'Food', 'FoodSecurity');
+INSERT INTO NEED_TYPE (NeedTypeID, NeedName, Category) VALUES (2, 'Water', 'WASH');
+INSERT INTO NEED_TYPE (NeedTypeID, NeedName, Category) VALUES (3, 'Medicine', 'Health');
+COMMIT;
+
+-- INSERT INTO AID_PACKAGE
+INSERT INTO AID_PACKAGE (PackageID, PackageName, PackageCategory, UnitName, Notes)
+VALUES (1, 'Food Parcel', 'Food', 'Parcel', NULL);
+
+INSERT INTO AID_PACKAGE (PackageID, PackageName, PackageCategory, UnitName, Notes)
+VALUES (2, 'Hygiene Kit', 'WASH', 'Kit', NULL);
+
+COMMIT;
+
+-- INSERT INTO FAMILY
+INSERT INTO FAMILY ( 
+FamilyID, OriginalAddressID, HeadPersonID, PrimaryPhone, RegistrationDate,
+TotalMembers, TotalChildren, TotalElderly, TotalPersonsWithDisability, TotalOrphans, Status) 
+VALUES (1, 1, NULL, '0591234567', DATE '2024-11-12', 5, 3, 0, 0, 1, 'Active');
+
+
+FamilyID, OriginalAddressID, HeadPersonID, PrimaryPhone, RegistrationDate, TotalMembers, TotalChildren, TotalElderly, TotalPersonsWithDisability, TotalOrphans, Status
+) VALUES (2, 2, NULL, '0597654321', DATE '2025-10-03', 4, 2, 1, 1, 0, 'Active');
+
+COMMIT;
+
+--  INSERT INTO PERSON
+INSERT INTO PERSON (PersonID, FamilyID, FullName, Gender, DateOfBirth, RelationshipToHead, VulnerabilityFlag, Notes)
+VALUES (101, 1, 'Hani Alzain', 'Male', DATE '1988-04-18', 'Father', 'N', NULL);
+
+INSERT INTO PERSON (PersonID, FamilyID, FullName, Gender, DateOfBirth, RelationshipToHead, VulnerabilityFlag, Notes)
+VALUES (102, 1, 'Farah Alzain', 'Female', DATE '1992-07-30', 'Mother', 'N', NULL);
+
+INSERT INTO PERSON (PersonID, FamilyID, FullName, Gender, DateOfBirth, RelationshipToHead, VulnerabilityFlag, Notes)
+VALUES (201, 2, ' Ahmed AbuShamala', 'Male', DATE '1983-12-09', 'Father', 'N', NULL);
+
+INSERT INTO PERSON (PersonID, FamilyID, FullName, Gender, DateOfBirth, RelationshipToHead, VulnerabilityFlag, Notes)
+VALUES (202, 2, 'Huda AbuShamala', 'Female', DATE '1987-02-21', 'Mother', 'Y', NULL);
+
+COMMIT;
+
+
+-- UPDATE FAMILY.HeadPersonID (FK)
+UPDATE FAMILY SET HeadPersonID = 101 WHERE FamilyID = 1;
+UPDATE FAMILY SET HeadPersonID = 201 WHERE FamilyID = 2;
+COMMIT;
+
+--  NOT NULL 
+ALTER TABLE FAMILY MODIFY (HeadPersonID NOT NULL);
+COMMIT;
+
+
+-- INSERT INTO LOCATION
+INSERT INTO LOCATION (LocationID, LocationName, LocationTypeID, AddressID, ManagingOrgID, Capacity, GPS_Lat, GPS_Lng)
+VALUES (1, 'School Shelter - Al Rimal', 1, 1, 1, 500, NULL, NULL);
+
+INSERT INTO LOCATION (LocationID, LocationName, LocationTypeID, AddressID, ManagingOrgID, Capacity, GPS_Lat, GPS_Lng)
+VALUES (2, 'Tent Camp - Al Mawasi', 2, 2, 2, 800, NULL, NULL);
+
+COMMIT;
+
+-- INSERT INTO STAY
+(INSERT INTO STAY (StayID, FamilyID, LocationID, StayStartDateTime, StayEndDateTime, ShelterUnit, IsCurrent
+VALUES (1, 1, 1, DATE '2024-12-18', NULL, 'Room 12', 'Y');
+
+INSERT INTO STAY (StayID, FamilyID, LocationID, StayStartDateTime, StayEndDateTime, ShelterUnit, IsCurrent)
+ VALUES (2, 2, 2, DATE '2025-11-27', NULL, 'Tent A-3', 'Y');
+
+COMMIT;
+
+--  INSERT INTO DISPLACEMENT_EVENT
+INSERT into DISPLACEMENT_EVENTINSERT INTO DISPLACEMENT_EVENT (EventID, FamilyID, FromStayID, ToLocationID, EventStartDateTime, EventType, CauseTrigger, TransportationType)
+VALUES (1, 1, NULL, 1, DATE '2024-12-18', 'Evacuation', 'Shelling', 'On foot');
+
+INSERT INTO DISPLACEMENT_EVENT (EventID, FamilyID, FromStayID, ToLocationID, EventStartDateTime, EventType, CauseTrigger, TransportationType) 
+VALUES (2, 2, NULL, 2, DATE '2025-11-27', 'Transfer', 'EvacuationOrder', 'Car');
+
+COMMIT;
+
+-- INSERT into NEED_ASSESSMENT
+INSERT INTO NEED_ASSESSMENT (AssessmentID, StayID, AssessmentDateTime, AssessedByOrgID, Method, OverallSeverityScore) 
+VALUES (1, 1, DATE '2025-01-06', 1, 'Interview', 4);
+
+INSERT INTO NEED_ASSESSMENT (AssessmentID, StayID, AssessmentDateTime, AssessedByOrgID, Method, OverallSeverityScore) 
+VALUES (2, 2, DATE '2025-12-04', 2, 'Form', 3);
+
+COMMIT;
+
+-- INSERT into NEED_ITEM
+INSERT INTO NEED_ITEM (NeedItemID, AssessmentID, NeedTypeID, TargetPersonID, QuantityNeeded, PriorityLevel, Status) 
+VALUES (1, 1, 1, 101, 1, 5, 'Open');
+
+INSERT INTO NEED_ITEM (NeedItemID, AssessmentID, NeedTypeID, TargetPersonID, QuantityNeeded, PriorityLevel, Status)
+VALUES (2, 1, 2, NULL, 1, 4, 'Open');
+
+INSERT INTO NEED_ITEM (NeedItemID, AssessmentID, NeedTypeID, TargetPersonID, QuantityNeeded, PriorityLevel, Status) 
+VALUES (3, 2, 3, 202, 1, 5, 'Open');
+
+COMMIT;
+
+-- INSERT into AID_DISTRIBUTION
+INSERT INTO AID_DISTRIBUTION (DistributionID, LocationID, DonorOrgID, PackageID, AssessmentID, DistributionDateTime, DistributionNotes) 
+VALUES (1, 1, 1, 1, 1, DATE '2025-01-14', 'Food distribution based on assessment');
+
+INSERT INTO AID_DISTRIBUTION (DistributionID, LocationID, DonorOrgID, PackageID, AssessmentID, DistributionDateTime, DistributionNotes) 
+VALUES (2, 2, 2, 2, 2, DATE '2026-02-18', 'Hygiene distribution based on assessment');
+
+COMMIT;
+
+-- INSERT into AID_RECEIPT (UNIQUE (DistributionID, FamilyID) prevents duplicates)
+INSERT INTO AID_RECEIPT (
+ReceiptID, DistributionID, FamilyID, ReceivedDateTime, Quantity, ReceiptStatus, ProofCode, VerifiedByName) 
+VALUES (1, 1, 1, DATE '2025-01-14', 1, 'Received', 'P-001', 'Staff A');
+
+INSERT INTO AID_RECEIPT (ReceiptID, DistributionID, FamilyID, ReceivedDateTime, Quantity, ReceiptStatus, ProofCode, VerifiedByName) 
+VALUES (2, 2, 2, DATE '2026-02-18', 1, 'Received', 'P-002', 'Staff B');
+
+COMMIT;
+
+
+-- UPDATE 
+UPDATE FAMILY SET Status = 'Inactive' WHERE FamilyID = 2;
+COMMIT;
+
+
+-- DELETE 
+DELETE FROM NEED_ITEM WHERE NeedItemID = 2;
+COMMIT;
+
+
+-- Retrieving data using SELECT with various conditions and queries.
+-- 1. Show all families
+SELECT * FROM FAMILY;
+
+--2. Display only the active families in the system.
+SELECT FamilyID, Status
+FROM FAMILY
+WHERE Status = 'Active';
+
+--3. List all persons ordered by date of birth (from oldest to youngest).
+SELECT FullName, DateOfBirth
+FROM PERSON
+ORDER BY DateOfBirth;
+
+--4.Where is each family currently staying, and in which shelter unit?
+SELECT F.FamilyID, L.LocationName, S.ShelterUnit
+FROM FAMILY F
+JOIN STAY S ON F.FamilyID = S.FamilyID
+JOIN LOCATION L ON S.LocationID = L.LocationID
+WHERE S.IsCurrent = 'Y';
+
+--5.How many families are staying in each location?
+SELECT L.LocationName, COUNT(*) AS FamiliesCount
+FROM STAY S
+JOIN LOCATION L ON S.LocationID = L.LocationID
+GROUP BY L.LocationName;
+
+6. What are the high-priority needs identified for displaced families?
+SELECT NT.NeedName, NI.PriorityLevel
+FROM NEED_ITEM NI
+JOIN NEED_TYPE NT ON NI.NeedTypeID = NT.NeedTypeID
+WHERE NI.PriorityLevel >= 4;
+
+7. Which aid package were recived by each family and when were they distributed?
+SELECT F.FamilyID, P.PackageName, R.ReceiptStatus, D.DistributionDateTime
+FROM AID_RECEIPT R
+JOIN FAMILY F ON R.FamilyID = F.FamilyID
+JOIN AID_DISTRIBUTION D ON R.DistributionID = D.DistributionID
+JOIN AID_PACKAGE P ON D.PackageID = P.PackageID;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
