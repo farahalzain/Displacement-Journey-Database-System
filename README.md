@@ -95,16 +95,22 @@ The database includes several interconnected entities such as:
 # 📂 Project Structure
 
 ```bash id="o2wzju"
+```bash id="j8m2qx"
 Displacement-Journey-Database/
 │
 ├── docs/
 │   ├── Displacement_Journey_Project.pdf
-│   ├── Relational Schema - Displacement Journey.pdf
-│   └── Database_Project_Report.pdf
+│   ├── Relational Schema – Displacement Journey Database.pdf
+│   ├── تعريف الكيانات والصفات والعلاقات.pdf
+│   ├── Displacement_Journey_ERD_Chen_PKFK.drawio-1.pdf
+│   └── DBproject.txt
 │
 ├── images/
-│   └── Displacement_Journey_ERD_Schema.jpeg
+│   └── ERD & Schema.jpeg
+│
 └── README.md
+```
+
 ```
 
 ---
